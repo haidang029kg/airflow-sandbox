@@ -1,0 +1,65 @@
+version: '3'
+x-airflow-common:
+  &airflow-common
+  build: .
+  environment:
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://vnhd:123456@nocalhost:5432/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://vnhd:123456@nocalhost:5432/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    # AIRFLOW__CORE__LOAD_EXAMPLES: 'true'
+    AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-}
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./airflow_logs:/opt/airflow/logs
+    - ./airflow_plugins:/opt/airflow/plugins
+    - ./shared_volume:/opt/airflow/shared_volume
+  # user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
+  depends_on:
+    redis:
+      condition: service_healthy
+
+services:
+  webserver:
+    <<: *airflow-common
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD-SHELL", "[ -f /usr/local/airflow/airflow-webserver.pid ]" ]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    command: webserver
+    restart: always
+    container_name: "airflow_webserver"
+
+  scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+    container_name: "airflow_scheduler"
+
+  worker:
+    <<: *airflow-common 
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'celery --app airflow.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"'
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    command: celery worker
+    restart: always
+
+  redis:
+    image: redis:latest
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+    container_name: airflow_redis
