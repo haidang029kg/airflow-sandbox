@@ -2,3 +2,5 @@ airflow_logs
 shared_volume
 *.log
 *.pyc
+.env
+logs/

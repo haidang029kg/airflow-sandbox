@@ -1,5 +1,5 @@
-FROM apache/airflow:2.3.4
+FROM apache/airflow:2.10.0
 
-RUN pip install autopep8 grequests pyopenssl
+COPY requirements.txt .
 
-RUN pip install apache-airflow-providers-mongo
+RUN pip install -r requirements.txt
